@@ -1,0 +1,62 @@
+#version: '3.8'-- Descomentar esta linea si es una version inferior a la actual de docker-compose
+
+services:
+  # ----------------------------------------
+  # 1. SERVICIO DE BASE DE DATOS
+  # ----------------------------------------
+  db:
+    image: postgres:15
+    container_name: contabilidad_db_c
+    environment:
+      POSTGRES_DB: contabilidad_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ----------------------------------------
+  # 2. SERVICIO BACKEND (API)
+  # ----------------------------------------
+  api:
+    build: 
+      context: ../../Conta # Ruta a la carpeta del backend
+      dockerfile: Dockerfile
+    container_name: contabilidad_api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres123@db:5432/contabilidad_db
+      SECRET_KEY: your-secret-key-here
+    volumes:
+      - ../../Conta:/app # Montamos el código fuente para que '--reload' funcione
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # Agrega un healthcheck si quieres que el frontend dependa de que la API esté lista
+
+  # ----------------------------------------
+  # 3. SERVICIO FRONTEND
+  # ----------------------------------------
+  frontend:
+    build:
+      context: . # Ruta a la carpeta de tu frontend
+      dockerfile: Dockerfile # Nombre del Dockerfile en esa carpeta
+    container_name: contabilidad_frontend
+    ports:
+      - "3000:5173" # Exponemos el puerto estándar de desarrollo de frontend (ej: React, 3000)
+    volumes:
+      - .:/app # Montamos el código fuente para que '--reload' o hot-reloading funcione
+      - /app/node_modules # Evitamos conflictos con node_modules
+    depends_on:
+      - api # Opcional: Para asegurar que la API se inicie primero
+    # Si el frontend necesita acceder a variables de entorno, configúralas aquí.
+    environment:
+      VITE_API_URL: http://localhost:8000 # La URL que el frontend debe usar en el navegador
+
+# ----------------------------------------
+# VOLÚMENES
+# ----------------------------------------
+volumes:
+  postgres_data:
